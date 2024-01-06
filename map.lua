@@ -52,16 +52,20 @@ function add_new_chunks(chunk_x,chunk_y)
 	local typ_of_chunks=ceil(rnd(proba_new_object))
 		
 		if typ_of_chunks<=proba_by_objects[1] then
+			typ_of_object_that_spawn=1
 			proba_new_object+=150
 			object_already_here=true
 		elseif typ_of_chunks<=proba_by_objects[2] then
+			typ_of_object_that_spawn=2
 			proba_new_object+=100
 		elseif typ_of_chunks<=proba_by_objects[3] then
+			typ_of_object_that_spawn=3
 			proba_new_object+=50
 		elseif typ_of_chunks<=proba_by_objects[4] then
+			typ_of_object_that_spawn=4
 			proba_new_object+=10
 		end
-			if (typ_of_chunks<=proba_by_objects[4]) add_object_to_chunk(chunk_x,chunk_y,typ_of_chunks)
+			if (typ_of_chunks<=proba_by_objects[4]) add_object_to_chunk(chunk_x,chunk_y,typ_of_object_that_spawn)
 			if (proba_new_object>500) proba_new_object=500
 			print_display=proba_new_object
 	end
@@ -190,7 +194,7 @@ end
 
 
 function draw_lakes(o)
-	rectfill(o.x,o.y,100,100,8)
+	--rectfill(o.x,o.y,100,100,8)
 end
 
 
@@ -198,7 +202,7 @@ end
 
 
 function update_bags(o)
-	if btnp(❎) and between_two_objets(o,p)<10 and o.usable==true and o.typ==2 then
+	if btnp(❎) and between_two_objets(o,p)<10 and o.usable==true and no_enemy_nearby==false and (o.typ==4 or o.typ==2) then
 		gain_stuff(1,4,o)
 		o.usable=false
 	end
@@ -364,5 +368,8 @@ function draw_footprint()
 		if (f.timer>f.life_time) del(footprint,f)
 	end
 end
+
+
+
 
 
