@@ -7,7 +7,21 @@ __lua__
 
 --[[
 
+attention, le jeu est un peu mou
+il faut avoir les choses plus
+concentre et le combat plus 
+rapide (precision et changement
+de cible accru)
+
+!!!!
+faire des generations de mob
+dans les nouveaux chunks, et 
+un tout petit peu en bord decran
+
+
 faire fonction tempete de neige
+qui augmente au fur et a mesure
+des niveaux
 
 systeme de detection de lennemi
 avec bruit balles + si lennemi
@@ -16,11 +30,6 @@ joueur
 
 tache de sang quand touche (p
 ou enemy)
-
-avoir une fonction qui recheck
-les chunks uniquement quand
-le joueur a passer une centaine
-de pixel
 
 modifier les chunks pour que
 les objects apparaissent en 1er
@@ -36,11 +45,6 @@ seul
 faire en sorte que les spawns
 ont plus de chance dans la 
 direction ou regarde le joueur
-
-le menu upgrade change detat de
-bouton exit quand plus assez 
-d'xp (clignotte et quitte a 
-nimporte quel appuie)
 
 preciser le max possible pour
 chaque categorie d'amelioration
@@ -59,6 +63,24 @@ les attaques de monstres
 peuvent se jouer sur la pal
 
 animation p mort
+
+bug quand p doit clic sur feu
+
+menu game over
+
+cailloux, maison et actions
+maison
+
+c'est la vitesse dattaque
+et pas la precision qu'il faut
+up (precision deja eleve)
+
+options :
+
+le menu upgrade change detat de
+bouton exit quand plus assez 
+d'xp (clignotte et quitte a 
+nimporte quel appuie)
 
 ]]
 
@@ -134,8 +156,11 @@ function _init()
 	tremor_y=0
 	timer_press_button_o=0
 	timer_press_button_x=0
+	flash_screen=false
 	
 	--animes
+	animation_empty={0}
+	animation_1_to_2={1,2}
 	animation_1_to_3={1,2,3}
 	animation_1_to_4={1,2,3,4}
 	--animation_1_to_3_loop={1,2,3,2,1}
@@ -272,8 +297,8 @@ function _draw()
 	draw_cursor()
 	--print(print_display,p.x,p.y-50,12)
 	--print("chunks "..#chunks,p.x,p.y-30,12)
-	print(amount_campfire,p.x,p.y-20,12)
-	print(center_cam.x,p.x,p.y-10,12)
+	--print(amount_campfire,p.x,p.y-20,12)
+	--print(center_cam.x,p.x,p.y-10,12)
 	--rect(e.x,e.y,e.x+13,e.y+10,2)
 	--rect(p.x,p.y,p.x+p.l,p.y+p.h,2)
 
@@ -285,6 +310,7 @@ function _draw()
 
 	--interface
 	interface_game()
+	draw_flash_screen()
 
 end
 -->8
@@ -299,6 +325,8 @@ function update_p()
 	update_player_attack_mode()
 	update_precision_p()
 	check_immune_player()
+	life_dommage_bullets(p,2)
+	if (display_menu==false) update_cold_p()
 	
 	if (p.off>0) p.off-=1
 	p.x+=add_mvmt_x
@@ -391,6 +419,7 @@ function spawn_p()
 	v_normal=0,
 	hurt_time=0,
 	precision=1,
+	cold=10000,
 	--lvl_accuracy=1,
 	--lvl_attack_speed=1,
 	}
@@ -404,7 +433,7 @@ end
 
 --shoot
 
-function create_bullet(x,y,dx,dy,v,dmg)
+function create_bullet(x,y,dx,dy,v,dmg,typ)
 	add(bullets,{
 		x=x,
 		y=y,
@@ -415,6 +444,8 @@ function create_bullet(x,y,dx,dy,v,dmg)
 		v=v,
 		dmg=dmg,
 		time_life=80/v,
+		time_life_max=80/v,
+		typ=typ
 	})
 end
 
@@ -427,9 +458,9 @@ function update_bullets()
 	end
 end
 
-function life_dommage_bullets(someone)
+function life_dommage_bullets(someone,typ_hurt)
 	for b in all(bullets) do
-		if collision(b,someone,1) then
+		if collision(b,someone,1) and b.typ==typ_hurt and someone.invincible~=true then
  		for i=1,5 do
  			particule(b.x,b.y,2,2,15,8,9,rnd(1)-0.5,rnd(1)-0.5)
 			end
@@ -443,7 +474,12 @@ end
 
 function draw_bullets()
 	for b in all(bullets) do
-		pset(b.x,b.y,10)
+		if b.typ==1 then
+			pset(b.x,b.y,10)
+		elseif b.typ==2 then
+			circfill(b.x,b.y,2+timer_gbl%10/5,10)
+			circ(b.x,b.y,4+timer_gbl%10/5,5+timer_gbl%20/5)
+		end
 	end
 end
 
@@ -451,7 +487,7 @@ function shoot_p()
 	local angle_shoot_precision=cursor_angle+(rnd((p.precision*0.05*(distance_between_lock_and_p*0.033))*0.2))-(p.precision*0.05*(distance_between_lock_and_p*0.033))/8
 	local dx_shoot=cos(angle_shoot_precision)
 	local dy_shoot=sin(angle_shoot_precision)
-	create_bullet(p.x+p.l/2,p.y+p.h/2,dx_shoot,dy_shoot,2,p.dmg)
+	create_bullet(p.x+p.l/2,p.y+p.h/2,dx_shoot,dy_shoot,2,p.dmg,1)
  sfx(6)
  --activate_tremor(3,70)
  for i=1,5 do
@@ -600,6 +636,12 @@ end
 function add_xp(xp)
 	p.xp+=xp
 	p.xp_max+=xp
+end
+
+--cold bar
+
+function update_cold_p()
+	p.cold-=1
 end
 
 --[[
@@ -817,105 +859,6 @@ end
 ---
 
 
-
-
---[[
-function generate_map()
-	chunk_player_x=flr(p.x/100+0.5)*100-64
-	chunk_player_y=flr(p.y/100+0.5)*100-64
-	for i=-1,1 do
-		for j=-1,1 do
-			check_chunks_if_exist(chunk_player_x+i*100,chunk_player_y+j*100)
-			chunks_active_listing()
-		end
-	end
-end
-]]
-
-
---[[
-function add_new_chunks(chunk_x,chunk_y)
-	
-	local object_already_here=false
-	local object_coor_local={x=0,y=0,h=20,l=20}
-	for o in all(objects) do
-		if o.in_chunk_x==chunk_x and o.in_chunk_y==chunk_y then
-			object_already_here=true
-			object_coor_local.x=o.x
-			object_coor_local.y=o.y
-		end
-	end
-	
-	if object_already_here==false then
-		--proba_new_object-=1
-	local typ_of_chunks=ceil(rnd(proba_new_object))
-		
-		if typ_of_chunks<=proba_by_objects[1] then
-			typ_of_object_that_spawn=1
-			proba_new_object+=150
-			object_already_here=true
-		elseif typ_of_chunks<=proba_by_objects[2] then
-			typ_of_object_that_spawn=2
-			proba_new_object+=100
-		elseif typ_of_chunks<=proba_by_objects[3] then
-			typ_of_object_that_spawn=3
-			proba_new_object+=50
-		elseif typ_of_chunks<=proba_by_objects[4] then
-			typ_of_object_that_spawn=4
-			proba_new_object+=10
-		end
-			if (typ_of_chunks<=proba_by_objects[4]) add_object_to_chunk(chunk_x,chunk_y,typ_of_object_that_spawn)
-			if (proba_new_object>500) proba_new_object=500
-			print_display=proba_new_object
-	end
-
-	local zone_x_spawn_tree=100
-	if (object_already_here==true) zone_x_spawn_tree=80
-	local nbr_of_trees=(ceil(rnd(10))+6)
-	
-	trees_generate={}
-	for i=1,nbr_of_trees do
-		local coor_for_tree={x=ceil(rnd(zone_x_spawn_tree)),y=ceil(rnd(100)),l=1,h=1}
-		local check_collision_tree_objects=false
-		
-		if between_two_objets(coor_for_tree,object_coor_local)>50 then
-			if check_collision_tree_objects==false then
-				add(trees_generate,{
-					x=coor_for_tree.x+chunk_x,
-					y=coor_for_tree.y+chunk_y,
-					l=13,
-					h=3,
-					typ_side=ceil(rnd(3)),
-					typ_bot=ceil(rnd(3)),
-					typ_floor=ceil(rnd(10)),
-				})
-			end
-		end
-	end
-	
-	add(chunks,{
-		active=false,
-		x=chunk_x,
-		y=chunk_y,
-		l=100,
-		h=100,
-		typ=typ_of_chunks,
-		object=object_to_spawn,
-		trees=trees_generate,
-	})
-	
-end
-]]
-
-
-
-
-
-
-
-
-
-
 --objects
 
 
@@ -966,7 +909,7 @@ end
 
 
 function draw_buildings(o)
-	sspr(48,104,20,21,o.x,o.y-30)
+	sspr(71,108,20,21,o.x,o.y-30)
 end
 
 
@@ -978,7 +921,7 @@ end
 
 
 function draw_lakes(o)
-	rectfill(o.x,o.y,80,80,8)
+	--rectfill(o.x,o.y,80,80,8)
 end
 
 
@@ -1030,6 +973,7 @@ end
 
 
 --campfires
+
 
 function update_campfires(o)
 	if o.typ==1 then
@@ -1175,6 +1119,10 @@ function draw_vignetage()
 	fillp()
 end
 
+function print_ex(a)
+	print(a,x,y,col)
+end
+
 
 function mvmt_camera()
 	
@@ -1305,100 +1253,277 @@ function update_enemies()
 	if (display_menu==false) then
 		spawn_around_screen()
 		spawn_auto_enemies(spawn_random_screen_x,spawn_random_screen_y)	
+		
 		for e in all(enemies) do
-	 	life_dommage_bullets(e)
+		
+	 	life_dommage_bullets(e,1)
 	 	check_hurt_enemy(e)
 	 	check_life_enemies(e)
-	 	update_touch_enemies(e)
+	 	update_touch_e_to_p(e)
 	 	update_footprint(e,300)
 			check_distance_player(enemies,e)
-			if (e.typ==1) change_state_enemies(e)
+			
+			neutral_move_enemies(e)
+			check_change_move_to_attack(e)
+			
+			if e.state==3 then
+				e.timer_attack+=1
+				if (e.typ==1) attack_enemy_1(e)
+				if (e.typ==2) attack_enemy_2(e)
+				if (e.typ==3) attack_enemy_3(e)
+				if (e.typ==4) attack_enemy_4(e)
+				if (e.typ==5) attack_enemy_5(e)
+				if (e.typ==6) attack_enemy_6(e)
+			end
+			
 		end
 	end
 end
+
 
 function draw_enemies()
 	for e in all(enemies) do
 		draw_shadows(e,3,7,3,5,true)
-		if e.typ==1 and e.hurt_time==0 then
-			local spr_direction=false
-			if (e.dx<0) spr_direction=true
-			if e.state==1 then
-				sspr(0,59,13,10,e.x,e.y,13,10,spr_direction)
-			elseif e.state==2 then
-				animate(animation_1_to_3,10)
-				sspr(0+anime*14-14,59,13,10,e.x,e.y,13,10,spr_direction)
-			elseif e.state==3 then
-				animate(animation_1_to_4,10)
-				sspr(42+anime*14-14,59,13,10,e.x,e.y)
-			end
+		if e.hurt_time==0 then
+			check_spr_direction(e)
+			--draw_enemies_spr(e)
+			if (e.typ==1) draw_enemy_1(e)
+			if (e.typ==2) draw_enemy_2(e)
+			if (e.typ==3)	draw_enemy_3(e)
+			if (e.typ==4)	draw_enemy_4(e)
+			if (e.typ==5)	draw_enemy_5(e)
+			if (e.typ==6)	draw_enemy_6(e)
 		end
 	end
 end
 
 
------------
 
---creation
+--attacks
 
-function spawn_auto_enemies(x,y)
-	if timer_gbl%400==1 then
-		create_enemy(x,y,1,20,100)
+function attack_enemy_1(e)
+	if e.timer_attack<rnd(100)+100 then
+		typ_mvmt_enemy_around_p(e,10)
+	elseif p.hurt_time>0 and between_two_objets(p,e)<90 then
+		typ_mvmt_enemy_dir_p(e,false,1.2)
+	elseif e.timer_attack<301 then
+		typ_mvmt_enemy_dir_p(e,true,1)
+	elseif e.timer_attack>300 then
+		e.timer_attack=0
 	end
 end
 
-function check_hurt_enemy(e)
-	if e.hurt_time>0 then
-		e.hurt_time-=1
+function attack_enemy_2(e)
+	typ_mvmt_enemy_dir_p(e,true,0.5)
+	if e.timer_attack>rnd(300)+200 then
+		typ_mvmt_enemy_teleport(e,20,50)
+		e.timer_attack=0
 	end
 end
 
-function create_enemy(x,y,typ,pv,xp)
-	add(enemies,{
-		x=x,
-		y=y,
-		l=13,
-		h=6,
-		dx=0,
-		dy=0,
-		typ=typ,
-		pv=pv,
-		state=1,
-		xp=xp,
-		timer_activity=0,
-		timer_move=0,
-		icon=0,
-		id=rnd(300),
-		hurt_time=0,
-		p_distance=0,
-	})
+function attack_enemy_3(e)
+	typ_mvmt_enemy_dir_p(e,true,0.4)
+	--if between_two_objets(e,p)<12 then 
+	if collision(e,p,5) then
+		explosion_of_zone_and_dmg(e,20)
+		locking_cam_active=false
+		del(enemies,e)
+	end
+end
+
+function explosion_of_zone_and_dmg(e,zone)
+	if (between_two_objets(e,p)<zone) p.pv-=20
+	for other in all(enemies) do
+		if (between_two_objets(e,other)<zone) other.pv-=20
+	end
+	flash_screen=true
+	create_circ_particules(e.x+e.l/2,e.y+e.h/2,16,0.25,0.1,9,-1*rnd(0.1),rnd(40)+70,60,13,2,0.1,3,10,8)
+	activate_tremor(4,97)
+end
+
+function attack_enemy_4(e)
+	local attack_speed_e_up=80
+	if (collision(e,p,20)) attack_speed_e_up=10
+	if e.timer_attack>attack_speed_e_up then
+		local angle_e_to_p=angle_to(e,p)
+		create_bullet(e.x+e.l/2,e.y+e.h/2,cos(angle_e_to_p),-sin(angle_e_to_p),attack_speed_e_up/130+0.4,15,2)
+		e.timer_attack=0
+	end
 end
 
 
---states
+function attack_enemy_5(e)
+	if e.timer_attack<rnd(100)+100 then
+		typ_mvmt_enemy_around_p(e,10)
+	--elseif p.hurt_time>0 and between_two_objets(p,e)<90 then
+	elseif	e.timer_attack<220 then
+		e.timer_spe_1+=1
+		--e.timer_move=0
+		if (timer_gbl%5==1) create_bullet_fast(e)
+		typ_mvmt_enemy_dir_p(e,true,1+(e.timer_spe_1*0.1),true)
+	elseif e.timer_attack>220 then
+		e.timer_attack=0
+		e.timer_spe_1=0
+	end
+end
 
-function change_state_enemies(e)
+function attack_enemy_6(e)
+	if e.timer_attack<200 then
+		e.invincible=true
+		typ_mvmt_enemy_dir_p(e,true,0.3)
 	
-	--e.timer_activity+=1
-	
+	elseif e.timer_attack==201 then
+		local attack_typ_e=ceil(rnd(3))
+		if (attack_typ_e==1 and #enemies>3) attack_typ_e=ceil(rnd(2))+1
+		e.invincible=false
+		
+		if attack_typ_e==1 then
+			for i=1,3 do
+				create_enemy(rnd(100)+e.x-50,rnd(100)+e.y-50,1,20,100)
+			end
+		elseif attack_typ_e==2 then
+			e.timer_spe_1=100
+		elseif attack_typ_e==3 then
+			e.timer_spe_1=200
+		end
+		
+	elseif e.timer_attack<400 then
+		if e.pv<20 and timer_gbl%300>rnd(50)+280 then
+			--teleport
+		end
+		if e.timer_spe_1>0 and e.timer_spe_1<=100 and timer_gbl%10==1 then
+			create_bullet_fast(e)
+			e.timer_spe_1-=10
+		elseif e.timer_spe_1>102 and e.timer_spe_1<=200 then
+			typ_mvmt_enemy_dir_p(e,true,1.1)
+			if (timer_gbl%30==1) typ_mvmt_enemy_teleport(e,40,45)
+			palette_change=1
+			e.timer_spe_1-=1
+		end
+		
+	elseif e.timer_attack>400+rnd(100) then
+		e.timer_attack=0
+		e.timer_spe_1=0
+		
+	end
+end
+
+function create_bullet_fast(e)
+	local angle_e_to_p=angle_to(e,p)
+	create_bullet(e.x+e.l/2,e.y+e.h/2,cos(angle_e_to_p),-sin(angle_e_to_p),1.5,15,2)
+end
+
+function check_spr_direction(e)
+	local spr_direction=false
+	if (e.dx<0) spr_direction=true
+end
+
+--draws
+
+
+function draw_enemy_1(e)
 	if e.state==1 then
+		sspr(0,59,13,10,e.x,e.y,13,10,spr_direction)
+	elseif e.state==2 then
+		animate(animation_1_to_3,10)
+		sspr(0+anime*14-14,59,13,10,e.x,e.y,13,10,spr_direction)
+	elseif e.state==3 then
+		animate(animation_1_to_4,10)
+		sspr(42+anime*14-14,59,13,10,e.x,e.y)
+	end
+end
+
+function draw_enemy_2(e)	
+	if e.state==1 then
+		sspr(0,69,10,19,e.x-1,e.y-5,10,19,spr_direction)
+	elseif e.state>=2 then
+		animate(animation_1_to_3,8)
+		sspr(0+anime*10,69,10,19,e.x-1,e.y-5,10,19,spr_direction)
+	end
+	if (between_two_objets(e,p)<12 and timer_gbl%20>10) sspr(30,88,10,19,e.x-1,e.y-5,10,19,spr_direction)
+end
+
+function draw_enemy_3(e)
+	if e.state==1 then
+		sspr(0,89,7,13,e.x,e.y,7,13,spr_direction)
+	elseif e.state>=2 then
+		animate(animation_1_to_2,12)
+		sspr(0+anime*7,89,7,13,e.x,e.y,7,13,spr_direction)
+	end
+end
+
+function draw_enemy_4(e)
+	if e.state==1 then
+		sspr(41,69,12,16,e.x,e.y,12,16,spr_direction)
+	elseif e.state>=2 then
+		animate(animation_1_to_3,10)
+		if e.state==3 then
+		 anime=5
+		 if (e.timer_attack<40) anime=4
+		end
+		sspr(41+anime*12-12,69,12,16,e.x,e.y,12,16,spr_direction)
+	end
+end
+
+function draw_enemy_5(e)
+	if e.state==1 then
+		sspr(41,85,16,19,e.x,e.y,16,19,spr_direction)
+	elseif e.state==3 and e.timer_attack>0 then
+		animate(animation_1_to_2,6)
+		sspr(89+anime*16-16,85,16,19,e.x,e.y,16,19,spr_direction)
+	elseif e.state>=2 then
+		animate(animation_1_to_3,8)
+		sspr(41+anime*16-16,85,16,19,e.x,e.y,16,19,spr_direction)
+	end
+end
+
+function draw_enemy_6(e)
+	if e.state==3 and e.timer_attack>200 then
+		sspr(40,105,10,20,e.x,e.y-5,10,20,spr_direction)
+	elseif e.state>=2 then
+		animate(animation_1_to_3,8)
+		invincible_circ(e)
+		sspr(0+anime*10,105,10,20,e.x,e.y-5,10,20,spr_direction)
+	else
+		sspr(0,105,10,20,e.x,e.y-5,10,20,spr_direction)
+	end
+end
+
+function invincible_circ(e)
+	circ(e.x+4,e.y+4,15,3)
+end
+
+-------
+
+
+
+function neutral_move_enemies(e)
+	if e.state==1 then
+		e.timer_activity+=1
 		if (e.timer_activity>rnd(300)+300) then
 			e.state=2	
 			e.timer_activity=0
 		end
 	elseif e.state==2 then
 		enemy_move_rnd(e)
-	elseif e.state==3 then
-		attack_e1(e)
 	end
-	
-	if between_two_objets(p,e)<70 then
+end
+
+
+function check_change_move_to_attack(e)
+	if between_two_objets(p,e)<50 then
 		e.state=3
 	end
 	if between_two_objets(p,e)>120 then 
 		e.state=2
 	end
 end
+
+
+
+
+-----------
+
 
 --enemies move
 
@@ -1418,24 +1543,11 @@ function enemy_move_rnd(enemy)
 end
 
 
---attack by enemy
+--mvmt of enemies
 
-function update_touch_enemies(e)
+function update_touch_e_to_p(e)
 	if collision(e,p,-5) then
 		hurt_player(10)
-	end
-end
-
-function attack_e1(e)
-	e.timer_activity+=1
-	if e.timer_activity<rnd(100)+100 then
-		typ_mvmt_enemy_around_p(e,10)
-	elseif p.hurt_time>0 and between_two_objets(p,e)<90 then
-		typ_mvmt_enemy_dir_p(e,false,1.2)
-	elseif e.timer_activity<301 then
-		typ_mvmt_enemy_dir_p(e,true,1)
-	elseif e.timer_activity>300 then
-		e.timer_activity=0
 	end
 end
 
@@ -1454,21 +1566,42 @@ function typ_mvmt_enemy_around_p(e,s)
 	end
 end
 
-function typ_mvmt_enemy_dir_p(e,towards_p,s)
+function typ_mvmt_enemy_dir_p(e,towards_p,s,charge_bool)
 	local typ_of_direction_towards_p=1
 	local towards_p_angle=angle_to(e,p)
+	--if (charge_bool==true) charge_active_to_p=201
 	if (towards_p~=true) typ_of_direction_towards_p=-1
-	e.dx=cos(towards_p_angle)*s*typ_of_direction_towards_p
-	e.dy=-sin(towards_p_angle)*s*typ_of_direction_towards_p	
+	if (charge_bool==true and e.timer_spe_1<8) or charge_bool~=true then
+		e.dx=cos(towards_p_angle)*s*typ_of_direction_towards_p
+		e.dy=-sin(towards_p_angle)*s*typ_of_direction_towards_p
+	end
 	e.x+=e.dx
 	e.y+=e.dy
 end
 
-function charge_enemy()
+function typ_mvmt_enemy_teleport(e,min_near_p,max_near_p)
+	create_circ_particules(e.x+e.l/2,e.y+e.h/2,5,0.25,0.1,5,-1*rnd(0.1),rnd(40)+70,60,10,4,0.1,3,10,8)
+	flash_screen=true	
+	e.x=150+p.x
+	e.y=150+p.y
+	while between_two_objets(e,p)<min_near_p do
+		e.x=rnd(max_near_p*2)+p.x-max_near_p
+		e.y=rnd(max_near_p*2)+p.y-max_near_p
+	end
+	create_circ_particules(e.x+e.l/2,e.y+e.h/2,5,0.25,0.1,5,-1*rnd(0.1),rnd(40)+70,60,10,4,0.1,3,10,8)
+end
+
+--[[
+function typ_mvmt_enemy_charge_p(e,s)
+	if e.timer_attack<=4 then
+		local towards_p_angle=angle_to(e,p)
+		e.dx=cos(towards_p_angle)*s*typ_of_direction_towards_p
+		e.dy=-sin(towards_p_angle)*s*typ_of_direction_towards_p	
+	end	
 	e.x+=e.dx
 	e.y+=e.dy
 end
-
+]]
 
 --life
 
@@ -1485,7 +1618,6 @@ function check_life_enemies(e)
 end
 
 
-
 --check distance gbl
 
 function check_distance_player(parent,enfant)
@@ -1494,9 +1626,114 @@ function check_distance_player(parent,enfant)
 		del(parent,enfant)
 	end
 end
+
+--enemy hurt_time
+
+function check_hurt_enemy(e)
+	if e.hurt_time>0 then
+		e.hurt_time-=1
+	end
+end
+
+
+--creation
+
+function spawn_auto_enemies(x,y)
+	if timer_gbl%400==1 then
+		--setting 3 = typ
+		create_enemy(x,y,ceil(rnd(6)),20,100)
+	end
+end
+
+function create_enemy(x,y,typ,pv,xp)
+	add(enemies,{
+		x=x,
+		y=y,
+		l=8,
+		h=8,
+		dx=0,
+		dy=0,
+		typ=typ,
+		pv=pv,
+		state=1,
+		xp=xp,
+		timer_activity=0,
+		timer_move=0,
+		timer_attack=0,
+		timer_spe_1=0,
+		--type_activity="move",
+		icon=0,
+		id=rnd(300),
+		hurt_time=0,
+		p_distance=0,
+		invincible=false,
+	})
+end
+
+
+
+
+--[[
+spr_enemies_cara={
+--x,y,l,h,nbr_anim_2,nbr_anim_3,start_anime_2,start_anime_3,
+--delay_anime_2,delay_anime_3,mode_attack
+{0,59,13,10,animation_1_to_3,animation_1_to_4,-14,28,10,10,1},
+{0,69,10,19,animation_1_to_3,animation_1_to_3,0,0,8,8,1},
+{0,89,7,13,animation_1_to_2,animation_1_to_2,0,0,12,12,1},
+{41,69,12,16,animation_1_to_3,animation_1_to_3,-12,-12,10,10,2},
+{41,85,16,19,animation_1_to_3,animation_1_to_2,-16,32,6,8,3},
+{0,105,10,20,animation_1_to_3,animation_empty,0,40,8,8,3},
+}
+
+function draw_enemies_spr(e)
+	
+	local animation_by_state=animation_empty
+	local animation_start_by_state=0
+	local animation_delay_by_state=0
+	local display_during_atk_action=false
+
+	--uniquement pendant l'action
+	if spr_enemies_cara[e.typ][11]==3 then
+		display_during_atk_action=true
+		if e.state==3 and	timer_attack>0 then
+			display_during_atk_action=false
+		end
+	end
+	
+
+	if e.state==1 then 
+		animation_by_state=animation_empty
+		animation_start_by_state=0
+		animation_delay_by_state=0
+	elseif e.state==3 and display_during_atk_action==false then
+	 animation_by_state=spr_enemies_cara[e.typ][6]
+		animation_start_by_state=spr_enemies_cara[e.typ][8]
+		animation_delay_by_state=spr_enemies_cara[e.typ][10]
+	elseif e.state==2 then
+	 animation_by_state=spr_enemies_cara[e.typ][5]
+		animation_start_by_state=spr_enemies_cara[e.typ][7]
+		animation_delay_by_state=spr_enemies_cara[e.typ][9]
+	end
+	
+	
+	anime=0
+	animate(animation_1_to_3,8)
+	--animation_delay_by_state)
+	
+	--sprite immobile lors attack
+	if spr_enemies_cara[e.typ][11]==2 then
+		if e.state==3 then
+		 anime=60
+		 if (e.timer_attack<10) anime=48
+		end
+	end
+
+	sspr(spr_enemies_cara[e.typ][1]+animation_start_by_state+anime*spr_enemies_cara[e.typ][3],spr_enemies_cara[e.typ][2],spr_enemies_cara[e.typ][3],spr_enemies_cara[e.typ][4],e.x+e.l/2,e.y+e.h/2,spr_enemies_cara[e.typ][3],spr_enemies_cara[e.typ][4],spr_direction)
+	
+end
+]]
 -->8
 --menu and interface
-
 
 --
 
@@ -1686,11 +1923,17 @@ function interface_game()
 	local animation_interface_haut=0
 	if (menu_start==true) animation_interface_haut=timer_after_menu
 	print("♥",center_cam.x+6,center_cam.y+6-animation_interface_haut,3)	
-	rectfill(center_cam.x+13,center_cam.y+6-animation_interface_haut,center_cam.x+7+ceil(p.pv_max/4),center_cam.y+10-animation_interface_haut,10)
-	rectfill(center_cam.x+14,center_cam.y+7-animation_interface_haut,center_cam.x+6+ceil(p.pv/4),center_cam.y+9-animation_interface_haut,3)
+	rectfill(center_cam.x+13,center_cam.y+6-animation_interface_haut,center_cam.x+15+ceil(p.pv_max/4),center_cam.y+10-animation_interface_haut,10)
+	rectfill(center_cam.x+14,center_cam.y+7-animation_interface_haut,center_cam.x+14+ceil(p.pv/4),center_cam.y+9-animation_interface_haut,3)
 
 	print("◆",center_cam.x+6,center_cam.y+14-animation_interface_haut,12)	
 	print(p.xp,center_cam.x+14,center_cam.y+14-animation_interface_haut,12)	
+
+	local indicator_c=12
+	if (p.cold<25000 and timer_gbl%20>10) indicator_c=3
+
+	print("⧗",center_cam.x+6,center_cam.y+22-animation_interface_haut,indicator_c)	
+	rectfill(center_cam.x+13,center_cam.y+24-animation_interface_haut,center_cam.x+13+ceil(p.cold/1000),center_cam.y+24-animation_interface_haut,indicator_c)
 end
 
 -->8
@@ -1902,6 +2145,35 @@ end
 
 
 
+--flash
+
+--[[requis
+_init
+flash_screen=false
+timer_gbl
+
+_draw
+draw_flash_screen()
+
+function
+flash_screen=true
+
+]]
+
+
+--[[
+function add_flash_screen(col)
+	rectfill(center_cam.x-10,center_cam.y-10,center_cam.x+140,center_cam.y+140,col)
+end
+]]
+
+function draw_flash_screen()
+	if flash_screen==true then
+		rectfill(center_cam.x-10,center_cam.y-10,center_cam.x+140,center_cam.y+140,8)
+		if (timer_gbl%5==1) flash_screen=false
+	end
+end
+
 --particule effect
 
 --[[requis
@@ -1987,6 +2259,24 @@ function press_button()
 		timer_press_button_x=0
 	end
 end
+
+--timer until zero
+
+--[[requis
+update 
+update_timer_until_zero(a)
+
+]]
+
+
+function update_timer_until_zero(a)
+	if a>0 then
+		a-=1
+	else
+		a=0
+	end
+end
+
 __gfx__
 0cdd000cdd000cdd00fffe0000000000000000000000000000000000000000000000000000000000000000000000000087077077777777777777777777777777
 c66dd0c66dd0c66dd009990000000000000000000000000000000000000000000000000000000000000000000000080000000777077770777777777777777777
@@ -2013,24 +2303,24 @@ c6aaaaddaa99baaddd0aaada0aaada099adaa99aaa00000000000000000000000000000000000000
 02220022200020000002200000000000820000000000072000000000000000000000000000000000000000000000000000000000000000000000000000000077
 07220022200222000082200000000007722000000000822000000000000000000000000000000000000000000000000000000000000000000007000000000000
 02220222220222000077220000000002282000000000277700000000000000000000000000000000000000000000000000000000000000000000000000000007
-0020000002000000002772000000008887720000000028820000000000bbbb000000000000000000000000000000000000000000000000000000000000070007
-000000000000200000888220000000722227000000007727200000000bbbb3b00000000000000000000000000000000000000000000000000000000000000007
-2000000000000000008222700000008777720000000888272000000000b0bbbb0000000000000000000000000000000000000000000ccccccdd0000000000000
-0000000020000000002777200000002222720000000827227000000000000bbbb0000000000000000000000000000000000000000cccccdccddd000000000000
-000000000000000007777270000000728727000000022227700000000bb0b0bb0000000000000000000000000000000000000000cccccccddccdd0000f000000
-0000200000002000022282200000088822222000000288772000000000bbbbbbbb00000000000000000000000000000000000000ccdcdddddddddd000f000000
-00000000000000000887727200000222772770000002272270000000000000bbb00000000000000000000000000000000000000ccccddcccdddadd00ff000000
-0200000000200000082222270000077722722000000877772200000000000bbbbb0000000000000000000000000000000000000ccdddddddddddad00ff000000
-0000000000000000022277770000082288822700008272222700000000000bbb00b00000000000000000000000000000000000dcccd5ddddddddaad0ffe00000
-0000000000000000888822220000888872227200002728877200000000000bbbb0bb0000000000000000000000000000000000ddcd556dddcddddad0efe00000
-20000000000020007722222770007777822772700028822777000000000bbbbbb0bb0000000000000000000000000000000000cdd55666dd55ddddd0ef000000
-02000000000000002277772220002222777227200082227222000000000b00bbbb0bb000000000000000000000000000000000cdd556666dd5ddaaddee000000
-0000200000000000272227772000228822777220008787772720000000b0bbbbb0b0b000000000000000000000000000000000cdd566666dd2dddaddee000000
-000000000000000888882222700888772222277008882722772000000b0bbbbbb00bb000000000000000000000000000000000ccd5566665d22addadee200000
-000000002200000827772222270222227777722708222227227200000bbbbbbb0bb0b000000000000000000000000000000000ccdd566522dd2222ddee220000
-000000000000000222222772220777222277222202727877777200000b0bbb0bbbb00b00000000000000000000000000000000dcd225522add222fedee220000
-000000000000002227722227722222772222777788888222777720000b0b0000bb0b0b00000000000000000000000000000000ddd2222daaad222ee2ee220000
-000000000000000022222722220002222272222022277772222270000000000000000000000000000000000000000000000000dd2222daaa2ee652e22e220000
+00200000020000000027720000000088877200000000288200000000000000000000000000000000000000000000000000000000000000000000000000070007
+000000000000200000888220000000722227000000007727200000bbbb0000000000000000000000000000000000000000000000000000000000000000000007
+20000000000000000082227000000087777200000008882720000bbbb3b000000000000000000000000000000000000000000000000ccccccdd0000000000000
+000000002000000000277720000000222272000000082722700000b0bbbb000000000000000000000000000000000000000000000cccccdccddd000000000000
+000000000000000007777270000000728727000000022227700000000bbbb0000000000000000000000000000000000000000000cccccccddccdd0000f000000
+00002000000020000222822000000888222220000002887720000bb0b0bb00000000000000000000000000000000000000000000ccdcdddddddddd000f000000
+000000000000000008877272000002227727700000022722700000bbbbbbbb00000000000000000000000000000000000000000ccccddcccdddadd00ff000000
+0200000000200000082222270000077722722000000877772200000000bbb000000000000000000000000000000000000000000ccdddddddddddad00ff000000
+000000000000000002227777000008228882270000827222270000000bbbbb0000000000000000000000000000000000000000dcccd5ddddddddaad0ffe00000
+000000000000000088882222000088887222720000272887720000000bbb00b000000000000000000000000000000000000000ddcd556dddcddddad0efe00000
+200000000000200077222227700077778227727000288227770000000bbbb0bb00000000000000000000000000000000000000cdd55666dd55ddddd0ef000000
+0200000000000000227777222000222277722720008222722200000bbbbbb0bb00000000000000000000000000000000000000cdd556666dd5ddaaddee000000
+0000200000000000272227772000228822777220008787772720000b00bbbb0bb0000000000000000000000000000000000000cdd566666dd2dddaddee000000
+000000000000000888882222700888772222277008882722772000b0bbbbb0b0b0000000000000000000000000000000000000ccd5566665d22addadee200000
+00000000220000082777222227022222777772270822222722720b0bbbbbb00bb0000000000000000000000000000000000000ccdd566522dd2222ddee220000
+00000000000000022222277222077722227722220272787777720bbbbbbb0bb0b0000000000000000000000000000000000000dcd225522add222fedee220000
+00000000000000222772222772222277222277778888822277772b0bbb0bbbb00b000000000000000000000000000000000000ddd2222daaad222ee2ee220000
+00000000000000002222272222000222227222202227777222227b0b0000bb0b0b000000000000000000000000000000000000dd2222daaa2ee652e22e220000
 0000088000000088000000030000000003000030000000300000030000000000000000000000000000000000808080808080800d222daaaaae5555222e220000
 0000080000000008000000000300000033030003030000000000000000000000000000000000000000000008000000000000000de22faaa2a2655522ae220000
 00088000000000000800000033000030330030333003003030300030000000000000000000000000000000000000000000000065fe2eeaaa26665522ae220000
@@ -2055,24 +2345,24 @@ c6aaaaddaa99baaddd0aaada0aaada099adaa99aaa00000000000000000000000000000000000000
 b0bbbbbbbbb0000bbbbbbbbbb0b0b0bbbbbbbbb00000bbbb0bbbb0000bbbbbbbbbb0b0b00bbb0b0bb0000bb0bbbbbbb0b00000bbbbbbaaaaaaaaaaaaabbbbbb0
 00b0bbbb0bb000b0bb0b0bbb000000bb0b0bbbb0000bbbbb0bb0bbb000bbbb0bbb000000b0bb00bb0bb00000bb0bb000000000b00bbaaaeaabaaaaaabbbbbbbb
 00b0b00b0b0000000bb000bb0000000b0b00b0b000bb0bb000b000b0000bb00bb00000bbbb000000bb0000000bbb000000000000baaaaeebbbbbbeeaaab88bbb
-00b0b00b0b00000000b00bb0000000b00b00b00b00b000bb000bb00000000bbb0000000b0000000000000000000b00000000000aaaaeeebbbbbbbbbeeaaaa880
-00bb0b0bb0b000000bbb0bbb000000bb0b00bb0b00000bb0000000000bb0000000000bb00bb000000000000000000000000000beeebbbb88bbbbbbbbbeeaaba0
-00b00000b000b00000b000b000000000b0000b00800bbbbbb0000000bbbbb00000b0bbbbbb0b00000000000000000000000000bbbbb88bbb88e888bbbbbebbb8
-00b00000b000b00000b000b00000b000b0000b00000b3bbb0bb000bbb3bbb0000b00b3bbbb0b00000000000000000000000000bbb8bbbb888888b8888bbbbb88
-000b000b00000b000b0000bb000bb000bb0bb000800bbbbbb00b0b00bbbbbb000b00bbbbb00b0000bbb0000000000000000000b00bb08888b88888ee888b8880
-000bb0bb00000bb0bb00000b000b00000bbb00000000bbbbb000bb00bbbb00b000bb0bbbb000000bbbbb00000000000000000000000000008888888888888000
-0000bbb0000000bbb0000000bb0b00000bbb0000800bbb00bb0000b0bb0b00b00000bb0bbb0000bb3bbbb0000000000000000080000000000000000000000000
-00003bb00000003bb00000003bb0000003bb000000b00b00b000000bb00b0b000000bb0b0b0000bbbbbb0b000000000000000000000000000000000000000000
-0000b3b0000000b3b0000000b3b000000b3b00008b000b00b000000bb00b0b0000000b0b000000b0bbb00b0000000bbb0bb00080000000000000000000000000
-0000bbb0000000bbb000000bbbb00000bbbbb0000b000b00b000000b000b0000000000b0000000b00bb00b00000bbbbbbbb00000000000000000000000000000
-000bbbbb00000bbbbb0000bbbbbb000bbbbbbb0080b00b00b000000b000b000000000bb000000b000bb00b0000bbbbbbbbb00080000000000000000000000000
-00bbbbbb0000bbbbbb000bbbbbbb000bbbbbbb0000000b00b000000b000b000000000b0b00000b000bb00b000bbb3bbbb0b00000000000000000000000000000
-00bbbbbbb000bbbbbbb0bbbbbbbbb00bbbbbbbb08000b000b0000000b00b000000000b0b00000b00b0b00b000b0bbbbbb00b0080000000000000000000000000
-00bb3bbbb00bbb3bbbb03bbb33bbb000bb3bbbb00000b0000b000000b0b0000000000b0b00000b00b0b00b0000b0b0bb000b0000000000000000000000000000
-0bb0b0b3bb0b30b03bb033bb0b3bb000bbb0b3bb8000b0000b000000b0b000000000b000b0000000b0000b0000b0b0b0000b0080000000000000000000000000
-0b3bb0b0bb030b00b3000bb000bb00000bbbb0bb0000b0000b000000b0b000000000b000b0000000b0000b0000b00bb0000b0000000000000000000000000000
-0033b0bb30000b00bb0000b000bb000000bbbb30800b0000b00000000b0b0000000b000b000000000b0000b000b000bbb000b080808080808080808080808080
-0000b0b0000000b0b00000b0000b000000bb00000000000b00000000000000000000000000000000000000000000000000000000000000000000000000000000
+00b0b00b0b00000000b00bb0000000b00b00b00b00b000bb000b000000000bbb0000000b0000000000000000000b00000000000aaaaeeebbbbbbbbbeeaaaa880
+00bb0b0bb0b000000bbb0bbb000000bb0b00bb0b00b00000000b00000000000000000000000000000000000000000000000000beeebbbb88bbbbbbbbbeeaaba0
+00b00000b000b00000b000b000000000b0000b0080000bb0000000000bb0000000000bb00bb000000000000000000000000000bbbbb88bbb88e888bbbbbebbb8
+00b00000b000b00000b000b00000b000b0000b00000bbbbbb0000000bbbbb00000b0bbbbbb0b00000000000000000000000000bbb8bbbb888888b8888bbbbb88
+000b000b00000b000b0000bb000bb000bb0bb000800b3bbb0bb000bbb3bbb0000b00b3bbbb0b00000000000000000000000000b00bb08888b88888ee888b8880
+000bb0bb00000bb0bb00000b000b00000bbb0000000bbbbbb00b0b00bbbbbb000b00bbbbb00b0000bbb000000000000000000000000000008888888888888000
+0000bbb0000000bbb0000000bb0b00000bbb00008000bbbbb000bb00bbbb00b000bb0bbbb000000bbbbb00000000000000000080000000000000000000000000
+00003bb00000003bb00000003bb0000003bb0000000bbb00bb0000b0bb0b00b00000bb0bbb0000bb3bbbb0000000000000000000000000000000000000000000
+0000b3b0000000b3b0000000b3b000000b3b000080b00b00b000000bb00b0b000000bb0b0b0000bbbbbb0b000000000000000080000000000000000000000000
+0000bbb0000000bbb000000bbbb00000bbbbb0000b000b00b000000bb00b0b0000000b0b000000b0bbb00b0000000bbb0bb00000000000000000000000000000
+000bbbbb00000bbbbb0000bbbbbb000bbbbbbb008b000b00b000000b000b0000000000b0000000b00bb00b00000bbbbbbbb00080000000000000000000000000
+00bbbbbb0000bbbbbb000bbbbbbb000bbbbbbb0000b00b00b000000b000b000000000bb000000b000bb00b0000bbbbbbbbb00000000000000000000000000000
+00bbbbbbb000bbbbbbb0bbbbbbbbb00bbbbbbbb080000b00b000000b000b000000000b0b00000b000bb00b000bbb3bbbb0b00080000000000000000000000000
+00bb3bbbb00bbb3bbbb03bbb33bbb000bb3bbbb00000b000b0000000b00b000000000b0b00000b00b0b00b000b0bbbbbb00b0000000000000000000000000000
+0bb0b0b3bb0b30b03bb033bb0b3bb000bbb0b3bb8000b0000b000000b0b0000000000b0b00000b00b0b00b0000b0b0bb000b0080000000000000000000000000
+0b3bb0b0bb030b00b3000bb000bb00000bbbb0bb0000b0000b000000b0b000000000b000b0000000b0000b0000b0b0b0000b0000000000000000000000000000
+0033b0bb30000b00bb0000b000bb000000bbbb308000b0000b000000b0b000000000b000b0000000b0000b0000b00bb0000b0080808080808080808080808080
+0000b0b0000000b0b00000b0000b000000bb0000000b0000b00000000b0b0000000b000b000000000b0000b000b000bbb000b000000000000000000000000000
 0000b0b0000000b00b0000b0000b000000b0b000800000b00000b0000000000b0000b0000000000b0000b0000000000000000000000000000000000000000000
 0000b0b00000000b0b00000b0000b00000b00b000000bb00bbbbb000000000b0000bb000000000b000bbb000000000b000000000000000000000000000000000
 0000b0b0000000000b0000000000b0000b000000800b3bbbb00000000000bb00bbb000000000bb00bb00000000000b000bbb0000000000000000000000000000
@@ -2092,27 +2382,27 @@ bbbbb3bbbbbb3b33bbb3b33b3b330000b3b3bbb3800bb00bbbbbbbb0000bb00bbbbbbbb00000bb00
 b0b0bb000b00bbb0b000b303330300000bb00b008b000b000000b0b0000b00b0000b0b000b00b0000b000b0000000000000b0000000bb000000bb00000000000
 0000000000000000000000000000000000bb0b000b0000b00000b0b00000b0b0000b00b00b00b0000b0000b00000000000000000000000000000000000000000
 000000000000000000000000000000000bb0bb008b0000b0000b0b000000bb0000b00b000b000b00b0000b000000000000000000000000000000000000000000
-00000000000000000000000000000000000000000000000000000000000000000000000000ffff00000000000000000000000000000000000000000000000000
-0033300cb0003330cb000033300cb00033300cb00cb333000000000000000000000000000fbebff0000000000000000000000000000000000000000000000000
-0333330bcb033333bcb00333330bcb0333330bcb0bcb3330000000000000000000000000feebebff000000000000000000000000000000000000000000000000
-03bb330bdb03bb33bdb003bb330bdb03bb330bdb0bdbbb3000000000000000000000000faaaeeebff00000000000000000000000000000000000000000000000
-03bb330bb003bb33bb0003bb330bb003bb330bb00bbbb3300000fefaabebae00000000feb98beeabaab000000000000000000000000000000000000000000000
-033b333b00033b33b000033b333b00033b333b000b33b333000faaaebbbebbe000000fbee99beeaebfff00000000000000000000000000000000000003330000
-0bbbbb3b000bbbbbb00003bbbb3b0003bbbb3b000bbbb3bb00faaaaaebbbebbe0000fbeeb99bbeaebe98f000000000000000000000000000000000003333000b
-bbbbbbbb00bbbbbbbb000bbbbbbb000bbbb3bb00bbbbbbb300fa999aeabbebbb000feebeffffbebebbe99f00000000000000000000000000000000003bb330cd
-0bbbb3bbb00bbbb3bb00bbbbb3bb000bbbb3bb00bbbbbb330fe99899eebbbebbe00faaaaaaabbbaabbbeff00000000000000000000000000000000000bb330bd
-b0bbb33bb0b0bbb33b000bbbb33b00b0bbb3bb00b0bb33330ee98999eeabbebbe00fbbbbbbbbbbbbbbbbbb000000000000000000000000000000000000b330b0
-b0bb3330b0b0bb333bb0b0bb333b00b0bb33bb000bbb3330eafaaaaaeaebbbebbe0fbebebebebbebebebef00000000000000000000000000000000000bbb30b0
-b0033330b0b003333bb0b003333b000003333b000b033330eaeafeeaebaebbebbe00aebfeebeeaeebbbeb00000000000000000000000000000000000bbbb3bb0
-b0b03b30b000b03b30b0b0b03b3b0000b0bb3b000b0b3b30eafeeeeeeeeeeeeeee00aeeeeeeeeaeb989ee00000000000000000000000000004330000b0bb30bb
-00b03bb0b000b03bb0b000b0bbb0b000b0bb0b000b0b3bb00feababbfeba9999b000bfeeffefebeb899eb000000000000000000000000000466330b00b0bb00b
-0bb00bb0b00bb00bb0b00bb0bb00b0000bbb0b000b0bbbb00eeabbbbbeea9989e000afeaabbeebeb998ee00000000000000000000000000036533bc0bb0bb0b0
-0bb00bb0b00bb00bb0b000bbbb00b000bbb00b000b0bbbb00aeabbabbfea9899e000bfa9899bfaeb989be0000000000000000000000000000bbf3bc0bb0bb0b0
-0bb00bb0b00bbb0bb0b000bbb000b000bbb000b00b0b0bb00afbabbbbfba8999e000bfb899bbfbee999be900000000000000000000000000fffbfb000b0b00b0
-0bb00b00b000bb0b00b000bb0000b0000b0b00b00b0b0b000afbbabbbeaa9999b000bebaababeaee99fbb9000000000000000000000000000bbbbb000b0b00b0
-00b00b0b00000b0b0b00000bb000b0000b0bb0b00b0b0b000eeabbbabfeefefef000bfbaafbbebeef7ffbf000000000000000000000000000b0b0b00030300b0
-00b00b0b00000bb00b00000b0b00b000b000b0b00b0b0b00bbebaababe7beeeeef0bb7baaaabe7beeee7be1b7baaaabe7beeee7be00000000000000000000000
-00b00b0b00000bb00b0000b00b00b000b000b0b00b0b0b00befbbbbbbee7be7b7f0b7bbff7bbb77be7b7be17bbff7bbb77be7b7be00000000000000000000000
+0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000fffff00000000000eeeee0000000000
+0033300cb0003330cb000033300cb00033300cb00cb33300000000000000000000000000000000000000000000000000fbbfe8f000000000ebabebe000000000
+0333330bcb033333bcb00333330bcb0333330bcb0bcb333000000000000000000000000000000000000000000000000feebbfe9f00000000eabaebe000000000
+03bb330bdb03bb33bdb003bb330bdb03bb330bdb0bdbbb300000000000000000000000000000000000000000000000faaaeebfe9f0000000eabaebe000000000
+03bb330bb003bb33bb0003bb330bb003bb330bb00bbbb330000000000000000000000000000fefaabebabe0000000feb98beebbaab000000ebabebe0000ee000
+033b333b00033b33b000033b333b00033b333b000b33b33300000000000000000000000000fbbbebbbebbbe00000fbee99beeabfeef00000ebbbebe0000ee000
+0bbbbb3b000bbbbbb00003bbbb3b0003bbbb3b000bbbb3bb0000000000000000000000000fbaaabebbbebbbe000fbeeb99bbeaebfeef0000fffffeeffeeee000
+bbbbbbbb00bbbbbbbb000bbbbbbb000bbbb3bb00bbbbbbb30000000003330000000000000fa999aeabbebbbb00feebeffffbebebbfeef0feeeeeeeeeeeeeeee0
+0bbbb3bbb00bbbb3bb00bbbbb3bb000bbbb3bb00bbbbbb33000000003333000b00000000fe99899eebbbebbbe0aaaaaaaabbbaabbbffffeeeebbbeeeebbbbbee
+b0bbb33bb0b0bbb33b000bbbb33b00b0bbb3bb00b0bb3333000000003bb330cd00000000ee98999eeabbebbbe0abbbbbbbbbbbbbbbbbbfe00ee00fe0bb0bb0ee
+b0bb3330b0b0bb333bb0b0bb333b00b0bb33bb000bbb3330000000000bb330bd0000000eafaaaaaeaebbbebbbefbebebebebbebebebeffe00e000ee0bb00b0fe
+b0033330b0b003333bb0b003333b000003333b000b0333300000000000b330b00000000eaeafeeaebaebbebbbe0aebfeebeeaeebbbeb0ee000000ee0bb0000fe
+b0b03b30b000b03b30b0b0b03b3b0000b0bb3b000b0b3b30000000000bbb30b00000000eafeeeeeeeeeeeeeeee0aeeeeeeeeaeb989ee0ee000000fe0bb0000ee
+00b03bb0b000b03bb0b000b0bbb0b000b0bb0b000b0b3bb000000000bbbb3bb000000000feababbfeba9999be00bfeeffefebeb899eb0ef000aaaeeabb0000ef
+0bb00bb0b00bb00bb0b00bb0bb00b0000bbb0b000b0bbbb000000000b0bb30bb04330000eeaabbbbeea9989be00afeaabbeebeb998ee0fe00aabbeebaa0000ef
+0bb00bb0b00bb00bb0b000bbbb00b000bbb00b000b0bbbb0000000000b0bb00b466330b0aeabbbbbfea9899ae00bfa9899bfaeb989be0eeaabbbbeabbbaab0ee
+0bb00bb0b00bbb0bb0b000bbb000b000bbb000b00b0b0bb000000000bb0bb0b036533bc0afaabbbbfba8999be00bfb899bbfbee999be9eeabbbbbeebbbbbbbef
+0bb00b00b000bb0b00b000bb0000b0000b0b00b00b0b0b0000000000bb0bb0b00bbf3bc0afababbbeaa9999ae00bebaababeaee99fbb9feeeeeeeeeeeeeeeeee
+00b00b0b00000b0b0b00000bb000b0000b0bb0b00b0b0b00000000000b0b00b0fffbfb00eeabbbbbfeefefefb00bfbaafbbebeef7ffbffeaebebbeebbebbebee
+00b00b0b00000bb00b00000b0b00b000b000b0b00b0b0b00000000000b0b00b00bbbbb0b7eaaabbbe7beeeeeffbb7baaaab7bbeeee7beebeb7eeebeeee7eeebe
+00b00b0b00000bb00b0000b00b00b000b000b0b00b0b0b0000000000030300b00b0b0b0be7a7babbee7be7b7efb7bbff7bbbb7be7b7bee7bbff7bbb7ebe7be7e
 00900009000000090000999000099099000900009990090000900090090000000090000000000009000990900000000009000000909000090090000000909000
 00000999999999900999999999000000000099999999000009000009999900009009999990999990090000000999990090099000000099999900000999000909
 00999999999999999999999999999999999999999999999900009999999990090999999999999999000999999999999999999990099999999999999999999000
@@ -2130,4 +2420,3 @@ a61200000061002620066300b64011650106300b6200662004620036100261001610006100061000
 000100000000031000370003a000390003800036000330002e0002a000270001f0001000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 __music__
 00 03424344
-
